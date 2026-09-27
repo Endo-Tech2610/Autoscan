@@ -41,6 +41,12 @@
         }
         .input-error { animation: shake-red 0.4s ease-in-out; border: 2px solid red !important; }
 
+        @keyframes focusPulse {
+            0% { box-shadow: 0 0 0 0 rgba(0,0,128,0.55); background-color: #dbe8ff; }
+            100% { box-shadow: 0 0 0 6px rgba(0,0,128,0); background-color: #ffffff; }
+        }
+        .focus-transition { animation: focusPulse 0.7s ease-out; }
+
         input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type=number] { -moz-appearance: textfield; }
 
@@ -151,7 +157,8 @@
             border-bottom: 1px solid var(--win-border-light);
             border-right: 1px solid var(--win-border-light);
             box-shadow: inset 1px 1px #000000;
-            padding: 0 4px; color: #000; outline: none; transition: 0s; 
+            padding: 0 4px; color: #000; outline: none; 
+            transition: box-shadow 0.25s ease, background-color 0.25s ease, border-color 0.25s ease; 
         }
         
         .btn-row { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin: 10px 5px; }
@@ -233,7 +240,10 @@
         .refresh-circle:active { border: 1px inset #fff; }
 
         .data-section { 
-            flex: 1; display: flex; flex-direction: column; 
+            flex: 1 1 50%; 
+            min-height: 0;
+            max-height: 50%;
+            display: flex; flex-direction: column; 
             background: var(--win-bg); 
             border-top: 2px solid var(--win-border-light);
             border-left: 2px solid var(--win-border-light);
@@ -241,14 +251,16 @@
             border-bottom: 2px solid var(--win-border-darker);
             box-shadow: inset 1px 1px #dfdfdf, inset -1px -1px #808080;
             padding: 3px;
+            overflow: hidden;
         }
         .section-header { 
             background: linear-gradient(90deg, #808080, #c0c0c0); 
             padding: 3px 5px; color: #ffffff; font-weight: bold; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;
+            flex: 0 0 auto;
         }
         .section-header span { color: #ffffff; }
         
-        .scroll-container { flex-grow: 1; overflow-y: auto; background: #ffffff; border: 1px inset #fff; position: relative; }
+        .scroll-container { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: #ffffff; border: 1px inset #fff; position: relative; }
         
         /* Bảng dữ liệu chuẩn 98 */
         .excel-table { width: 100%; border-collapse: collapse; }
@@ -270,6 +282,15 @@
         }
         .row-enter {
             animation: queueRowIn 1s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        /* Nhấp nháy liên tục màu đỏ nhạt cho dòng có zone = AV trong Inventory Details */
+        @keyframes zoneAvBlink {
+            0%, 100% { background-color: #ffffff; }
+            50% { background-color: #ffb3b3; }
+        }
+        .zone-av-blink td {
+            animation: zoneAvBlink 1s ease-in-out infinite;
         }
         
         .wait-qty-input { width: 40px; height: 20px; text-align: center; font-weight: bold; padding: 0;}
@@ -458,19 +479,23 @@
 
                             <div id="wrongSkuWrap" style="display:none; margin-top:5px;">
                                 <label>SKU thực tế (hàng sai):</label>
-                                <input type="text" id="wrongSkuInput" autocomplete="off" placeholder="Nhập SKU / UPC thực tế...">
+                                <input type="text" id="wrongSkuInput" autocomplete="off" placeholder="Nhập SKU / UPC thực tế..." onkeydown="if(event.key==='Enter' || event.keyCode===13) { event.preventDefault(); focusSmooth(document.getElementById('wrongBoxInput')); }">
                             </div>
                             <div id="wrongBoxWrap" style="display:none; margin-top:5px;">
                                 <label>Vị trí (PL) - Sai hàng:</label>
-                                <input type="text" id="wrongBoxInput" autocomplete="off" placeholder="Nhập PL đang chứa hàng sai...">
+                                <input type="text" id="wrongBoxInput" autocomplete="off" placeholder="Nhập PL đang chứa hàng sai..." onkeydown="if(event.key==='Enter' || event.keyCode===13) { event.preventDefault(); focusSmooth(document.getElementById('qtyDisplay')); }">
                             </div>
                             <div id="brokenBoxWrap" style="display:none; margin-top:5px;">
                                 <label>Vị trí (PL) - Hư hỏng:</label>
-                                <input type="text" id="brokenBoxInput" autocomplete="off" placeholder="Nhập PL đang chứa hàng hư hỏng...">
+                                <input type="text" id="brokenBoxInput" autocomplete="off" placeholder="Nhập PL đang chứa hàng hư hỏng..." onkeydown="if(event.key==='Enter' || event.keyCode===13) { event.preventDefault(); focusSmooth(document.getElementById('qtyDisplay')); }">
                             </div>
                             <div id="excessBoxWrap" style="display:none; margin-top:5px;">
                                 <label>Vị trí (PL) - Dư hàng:</label>
-                                <input type="text" id="excessBoxInput" autocomplete="off" placeholder="Nhập Box Dư...">
+                                <input type="text" id="excessBoxInput" autocomplete="off" placeholder="Nhập Devide..." onkeydown="if(event.key==='Enter' || event.keyCode===13) { event.preventDefault(); focusSmooth(document.getElementById('excessMtbInput')); }">
+                            </div>
+                            <div id="excessMtbWrap" style="display:none; margin-top:5px;">
+                                <label>Nhập MTB (Dư hàng):</label>
+                                <input type="text" id="excessMtbInput" autocomplete="off" placeholder="Nhập MTB..." onkeydown="if(event.key==='Enter' || event.keyCode===13) { event.preventDefault(); focusSmooth(document.getElementById('qtyDisplay')); }">
                             </div>                        </div>
                     </div>
         </div>
@@ -576,6 +601,16 @@
 <script>
     
         let isBotPaused = false;
+
+    // Focus mượt: focus vào input kế tiếp kèm hiệu ứng highlight nhẹ
+    function focusSmooth(el) {
+        if (!el) return;
+        el.focus();
+        el.classList.remove('focus-transition');
+        void el.offsetWidth; // reset animation
+        el.classList.add('focus-transition');
+        setTimeout(() => el.classList.remove('focus-transition'), 700);
+    }
 
     function launchAutoBot() {
     const box = document.getElementById('botLogBox');
@@ -771,7 +806,7 @@
         document.getElementById('boxLockedLabel').innerText = val;
         document.getElementById('boxLockedBadge').style.display = "flex";
         document.getElementById('batchDisplay').innerText = currentBatchCode; 
-        document.getElementById('skuInput').focus();
+        focusSmooth(document.getElementById('skuInput'));
     }
 
     function unlockBoxId() {
@@ -779,7 +814,7 @@
         document.getElementById('boxInput').value = ""; 
         document.getElementById('boxInput').style.display = "";
         document.getElementById('boxLockedBadge').style.display = "none";
-        document.getElementById('boxInput').focus();
+        focusSmooth(document.getElementById('boxInput'));
     }
 
     window.onload = () => {
@@ -788,8 +823,8 @@
     document.getElementById('batchDisplay').innerText = currentBatchCode; 
     fetchData();
 
-    // Tự động refresh data mỗi 2 phút
-    setInterval(fetchData, 120000);
+    // Tự động refresh data mỗi 1 phút
+    setInterval(fetchData, 60000);
 
     // Gắn Enter cho Ship Order Batch
     document.getElementById('shipOrderInput').addEventListener('keydown', function(e) {
@@ -861,7 +896,7 @@
                 ship: row.c[3]?.v?.toString().trim().toUpperCase() || '' 
             }));
         
-        const ALLOWED_ZONES = ['A', 'AT', 'B', 'BT', 'C'];
+        const ALLOWED_ZONES = ['A1', 'AT', 'B', 'BT', 'C','AV','NRP','IMIB','MI'];
         onHandData = JSON.parse(tHand.substring(47, tHand.length - 2)).table.rows
             .map(row => ({
                 skuId: row.c[0]?.v?.toString().trim() || '', 
@@ -1071,7 +1106,7 @@
 
             if (inputVal) setTimeout(() => {
                 const boxEl = document.getElementById('excessBoxInput');
-                (boxEl.value.trim() ? document.getElementById('qtyDisplay') : boxEl).focus();
+                focusSmooth(boxEl.value.trim() ? document.getElementById('qtyDisplay') : boxEl);
             }, 100);
         } else if(filtered.length > 0) {
             const activeShips = [...new Set(filtered.map(f => f.ship.toString().toUpperCase()))];
@@ -1131,10 +1166,12 @@
             
             if(inputVal) {
                 setTimeout(() => {
-                    const qtyInput = document.getElementById('qtyDisplay');
-                    if(qtyInput) {
-                        qtyInput.focus();
-                    }
+                    const status = document.getElementById('statusSelect').value;
+                    let target;
+                    if (status === 'Hư hỏng') target = document.getElementById('brokenBoxInput');
+                    else if (status === 'Sai hàng') target = document.getElementById('wrongSkuInput');
+                    else target = document.getElementById('qtyDisplay');
+                    if (target) focusSmooth(target);
                 }, 100);
             }
         } else {
@@ -1152,7 +1189,7 @@
         if(onHandRecords.length > 0) {
             msg.style.display = "none"; table.style.display = "table";
             body.innerHTML = onHandRecords.map(item => `
-                <tr><td>${item.skuId}</td><td>${item.name}</td><td class="qty-cell">${item.qty}</td><td class="loc-cell">${item.loc}</td></tr>
+                <tr class="${['AV','IMIB','NRP','MI'].includes(item.zone) ? 'zone-av-blink' : ''}"><td>${item.skuId}</td><td>${item.name}</td><td class="qty-cell">${item.qty}</td><td class="loc-cell">${item.loc}</td></tr>
             `).join('');
             if (locCountEl) locCountEl.innerText = onHandRecords.length + " LOCs";
         } else {
@@ -1259,7 +1296,7 @@
         
         if(currentMaxQty <= 0) {
             document.getElementById('skuInput').value = "";
-            document.getElementById('skuInput').focus();
+            focusSmooth(document.getElementById('skuInput'));
             document.getElementById('res').style.display = "none";
             document.getElementById('bannerQty').style.display = "none";
         }
@@ -1280,7 +1317,7 @@
             packing: document.getElementById('packingSelect').value,
             shipInfo: document.getElementById('shipShow').textContent,
             boxInfo: '',
-            mtb: '---',
+            mtb: document.getElementById('excessMtbInput').value.trim().toUpperCase() || '---',
             inboundDate2: fromDate,
             zone: document.getElementById('zoneShow').textContent,
             wh: document.getElementById('selWh').value,
@@ -1294,12 +1331,13 @@
         });
         lastAddedIds = [excessId];
         renderQueue();        document.getElementById('noteInput').value = "";
+        document.getElementById('excessMtbInput').value = "";
         document.getElementById('skuInput').value = "";
         document.getElementById('bannerQty').style.display = "none";
         document.getElementById('res').style.display = "none";
         lastSku = "";
         setStatus('Good'); // Tự động nhảy về Good (đặt sau lastSku = "" để không query lại)
-        document.getElementById('skuInput').focus();
+        focusSmooth(document.getElementById('skuInput'));
     }
     function renderQueue() {
         const qBody = document.getElementById('queueBody');
@@ -1325,7 +1363,13 @@
         const idsToAnimate = lastAddedIds;
         lastAddedIds = []; // đã "tiêu thụ" xong, tránh animation lặp lại ở lần render sau
 
-        qBody.innerHTML = queueList.map((item, index) => `
+        // Hiển thị data mới nhất lên trên cùng: duyệt theo thứ tự index đảo ngược,
+        // nhưng vẫn giữ đúng index gốc trong queueList để update/xóa hoạt động chính xác.
+        const displayOrder = queueList.map((_, idx) => idx).reverse();
+
+        qBody.innerHTML = displayOrder.map(index => {
+            const item = queueList[index];
+            return `
             <tr class="${idsToAnimate.includes(item._id) ? 'row-enter' : ''}">                <td style="font-weight:bold;">${item.sku}</td>
                 <td>
                     <div class="info-horizontal">
@@ -1343,7 +1387,8 @@
                 <td style="text-align:center"><input type="number" class="wait-qty-input" id="queueInput_${index}" value="${item.customQty}" onchange="updateQueueQty(${index}, this)"></td>
                 <td class="btn-del" onclick="removeFromQueue(${index})">X</td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
     }
 
     function updateQueueQty(index, inputEl) {
@@ -1539,7 +1584,7 @@
         if(currentMaxQty <= 0) {
             setTimeout(() => {
                 document.getElementById('skuInput').value = "";
-                document.getElementById('skuInput').focus();
+                focusSmooth(document.getElementById('skuInput'));
                 document.getElementById('res').style.display = "none";
                 document.getElementById('bannerQty').style.display = "none";
             }, 800);
@@ -1562,17 +1607,20 @@
         document.getElementById('wrongBoxWrap').style.display  = (val === 'Sai hàng') ? 'block' : 'none';
         document.getElementById('brokenBoxWrap').style.display = (val === 'Hư hỏng')  ? 'block' : 'none';
         document.getElementById('excessBoxWrap').style.display = (val === 'Dư hàng')  ? 'block' : 'none';
-
+        document.getElementById('excessMtbWrap').style.display = (val === 'Dư hàng')  ? 'block' : 'none';
         if (val !== 'Sai hàng') {
             document.getElementById('wrongSkuInput').value = '';
             document.getElementById('wrongBoxInput').value = '';
         }
         if (val !== 'Hư hỏng') document.getElementById('brokenBoxInput').value = '';
-        if (val !== 'Dư hàng')  document.getElementById('excessBoxInput').value = '';
+        if (val !== 'Dư hàng') {
+            document.getElementById('excessBoxInput').value = '';
+            document.getElementById('excessMtbInput').value = '';
+        }
 
-        if (val === 'Sai hàng') document.getElementById('wrongSkuInput').focus();
-        if (val === 'Hư hỏng')  document.getElementById('brokenBoxInput').focus();
-        if (val === 'Dư hàng')  document.getElementById('excessBoxInput').focus();
+        if (val === 'Sai hàng') focusSmooth(document.getElementById('wrongSkuInput'));
+        if (val === 'Hư hỏng')  focusSmooth(document.getElementById('brokenBoxInput'));
+        if (val === 'Dư hàng')  focusSmooth(document.getElementById('excessBoxInput'));
 
         // đổi vào/ra chế độ Dư thì query lại SKU đang nhập
         if (lastSku && (prev === 'Dư hàng') !== (val === 'Dư hàng')) tim();
