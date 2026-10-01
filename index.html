@@ -51,7 +51,7 @@
         input[type=number] { -moz-appearance: textfield; }
 
         .left-panel { 
-            width: 32%; 
+            width: 27%; 
             height: 100%; 
             display: flex; 
             flex-direction: column; 
@@ -61,10 +61,26 @@
             flex: 1; 
             height: 100%; 
             display: flex; 
-            flex-direction: column; 
+            flex-direction: row; 
             gap: 12px; 
             min-width: 0; 
         }
+        .right-main {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 0;
+        }
+        #issuePanel { flex: 0 0 30%; max-height: 100%; height: 100%; min-width: 0; }
+        #issueLocBox {
+            flex: 0 0 auto; max-height: 30%; overflow-y: auto;
+            background: var(--win-bg); border: 1px inset #fff;
+            padding: 4px; margin-bottom: 4px;
+        }
+        #issueLocBox .loc-title { font-weight: bold; margin-bottom: 2px; }
+        .excel-table .issue-group td { background: #000080; color: #ffffff; font-weight: bold; }
         
         /* Cửa sổ chuẩn Windows */
         .glass { 
@@ -430,7 +446,9 @@
             </div>
             <div>
                 <label>Staff Name:</label>
-                <input type="text" id="staffInput" autocomplete="off">
+                <select id="staffInput">
+                <option value="">-- Chọn nhân viên --</option>
+                </select>
             </div>
             <div style="grid-column: span 2;">
                 <div style="display: flex; gap: 8px;">
@@ -552,6 +570,7 @@
 </div>
 
 <div class="right-panel">
+<div class="right-main">
     <div class="data-section">
         <div class="section-header">
             <span>Inventory Details</span>
@@ -594,6 +613,31 @@
                 <tbody id="queueBody"></tbody>
             </table>
             <div id="emptyQueue" class="empty-state">Queue is empty.</div>
+        </div>
+    </div>
+</div>
+
+    <div class="data-section" id="issuePanel">
+        <div class="section-header">
+            <span>Issue Data</span>
+            <span id="issueCount" class="count-badge">0 SKU</span>
+        </div>
+        <div id="issueLocBox">
+            <div class="loc-title">Devide Issue:</div>
+            <div id="issueLocList" class="info-horizontal"><span style="color:#808080;">---</span></div>
+        </div>
+        <div class="scroll-container">
+            <table class="excel-table" id="issueTable" style="display:none">
+                <thead>
+                    <tr>
+                        <th style="width: 38%;">SKU ID</th>
+                        <th style="width: 42%;">Status</th>
+                        <th style="width: 20%; text-align: center;">Qty</th>
+                    </tr>
+                </thead>
+                <tbody id="issueBody"></tbody>
+            </table>
+            <div id="issueEmpty" class="empty-state">NO BATCH SELECTED</div>
         </div>
     </div>
 </div>
@@ -758,6 +802,7 @@
         const label = document.getElementById('shipCountLabel');
         label.innerText = selectedShipOrders.length + " SELECTED";
         updateStatusTooltip(); 
+        renderIssuePanel();
         
         if (selectedShipOrders.length === 0) {
             dropdown.innerHTML = '<div style="color: #808080; text-align: center;">No orders</div>';
@@ -776,6 +821,29 @@
     const onHandUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&tq=select%20C,D,H,O,R&sheet=On%20hand`;
     const upcUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&tq=select%20A,G,H&sheet=UPC`;
     const sizeUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&tq=select%20A,C,F,G&sheet=Size`;
+    const staffUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json&tq=select%20G&sheet=Box%20DP`;
+
+async function fetchStaffList() {
+    const sel = document.getElementById('staffInput');
+    if (!sel) return;
+    try {
+        const r = await fetch(staffUrl + '&t=' + Date.now());
+        const t = await r.text();
+        const rows = JSON.parse(t.substring(47, t.length - 2)).table.rows;
+        const names = [...new Set(
+            rows.map(row => (row.c && row.c[0] && row.c[0].v !== null && row.c[0].v !== undefined)
+                ? row.c[0].v.toString().trim() : '')
+                .filter(n => n)
+        )];
+
+        const prev = sel.value; // giữ lại người đang chọn khi auto-refresh
+        sel.innerHTML = '<option value="">-- Chọn nhân viên --</option>' +
+            names.map(n => `<option value="${n}">${n}</option>`).join('');
+        if (prev && names.includes(prev)) sel.value = prev;
+    } catch (e) {
+        console.error("STAFF FETCH ERROR:", e);
+    }
+}
     
     let rawData = [], exportData = [], onHandData = [], upcData = [], sizeData = [], zoneData = [], lastSku = "";
     let queueList = [];
@@ -786,6 +854,98 @@
     let activeMtbBalances = {}; 
     let lockedBoxId = "";
     
+    // ===== ISSUE PANEL: Thiếu hàng / Sai hàng / Hư hỏng / Dư hàng của Ship Order đang chọn =====
+    const ISSUE_STATUSES = ['Thiếu hàng', 'Sai hàng', 'Hư hỏng', 'Dư hàng'];
+    let issueData = [];
+
+    async function fetchIssueData() {
+        try {
+            const r = await fetch(issueUrl + '&t=' + Date.now());
+            const t = await r.text();
+            const rows = JSON.parse(t.substring(47, t.length - 2)).table.rows;
+            issueData = rows.map(row => {
+                const c = row.c || [];
+                let status = '';
+                for (let k = 0; k < c.length; k++) {
+                    const v = c[k] && c[k].v;
+                    if (v !== null && v !== undefined && ISSUE_STATUSES.includes(v.toString().trim())) {
+                        status = v.toString().trim();
+                        break;
+                    }
+                }
+                return {
+                    sku: c[3]?.v?.toString().trim().toUpperCase() || '',
+                    qty: parseFloat(c[4]?.v) || 0,
+                    ship: c[5]?.v?.toString().trim().toUpperCase() || '',
+                    pl: c[15]?.v?.toString().trim().toUpperCase() || '',
+                    status: status
+                };
+            }).filter(i => i.status);
+            renderIssuePanel();
+        } catch (e) {
+            console.error("ISSUE FETCH ERROR:", e);
+        }
+    }
+
+    function renderIssuePanel() {
+        const locList = document.getElementById('issueLocList');
+        const body = document.getElementById('issueBody');
+        const table = document.getElementById('issueTable');
+        const empty = document.getElementById('issueEmpty');
+        const cnt = document.getElementById('issueCount');
+        if (!locList || !body) return;
+
+        if (selectedShipOrders.length === 0) {
+            locList.innerHTML = '<span style="color:#808080;">---</span>';
+            body.innerHTML = "";
+            table.style.display = "none";
+            empty.innerText = "NO BATCH SELECTED";
+            empty.style.display = "flex";
+            cnt.innerText = "0 SKU";
+            return;
+        }
+
+        const ships = selectedShipOrders.map(s => s.toString().toUpperCase().trim());
+        const rows = issueData.filter(i => i.ship && ships.some(s => i.ship.includes(s)));
+
+        // Vị trí (cột P) không trùng
+        const pls = [...new Set(rows.map(i => i.pl).filter(p => p))];
+        locList.innerHTML = pls.length
+            ? pls.map(p => `<span class="info-tag">${p}</span>`).join('')
+            : '<span style="color:#808080;">---</span>';
+
+        // Gộp theo Status + SKU
+        const agg = {};
+        rows.forEach(i => {
+            const key = i.status + '||' + i.sku;
+            agg[key] = (agg[key] || 0) + i.qty;
+        });
+        const list = Object.keys(agg).map(k => {
+            const [status, sku] = k.split('||');
+            return { status, sku, qty: Math.round(agg[k] * 100) / 100 };
+        }).sort((a, b) => (ISSUE_STATUSES.indexOf(a.status) - ISSUE_STATUSES.indexOf(b.status)) || a.sku.localeCompare(b.sku));
+
+        cnt.innerText = new Set(list.map(i => i.sku)).size + " SKU";
+
+        if (list.length === 0) {
+            body.innerHTML = "";
+            table.style.display = "none";
+            empty.innerText = "No issue data.";
+            empty.style.display = "flex";
+            return;
+        }
+
+        empty.style.display = "none";
+        table.style.display = "table";
+        body.innerHTML = ISSUE_STATUSES.map(st => {
+            const items = list.filter(i => i.status === st);
+            if (items.length === 0) return '';
+            const total = Math.round(items.reduce((sum, i) => sum + i.qty, 0) * 100) / 100;
+            return `<tr class="issue-group"><td colspan="2">${st} (${items.length} SKU)</td><td style="text-align:center;">${total}</td></tr>` +
+                items.map(i => `<tr><td style="font-weight:bold;">${i.sku}</td><td>${i.status}</td><td class="qty-cell">${i.qty}</td></tr>`).join('');
+        }).join('');
+    }
+
     function generateBatchCode() {
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         const letters = chars.charAt(Math.floor(Math.random() * chars.length)) + 
@@ -936,6 +1096,8 @@
         whSelect.value = currentWh;
         
         document.getElementById('status').innerText = "Data Ready";
+        fetchStaffList();
+        fetchIssueData();
         if(lastSku) tim(); 
     } catch(e) { 
         console.error("FETCH ERROR DETAIL:", e);
